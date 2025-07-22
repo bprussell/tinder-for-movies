@@ -1,4 +1,7 @@
 @page "/matches"
+@using TinderForMovies.Models
+@using TinderForMovies.Services
+@inject IMovieInteractionService InteractionService
 
 <div class="matches-container">
     <div class="matches-header">
@@ -6,14 +9,94 @@
         <p>Movies you've swiped right on</p>
     </div>
 
-    <div class="matches-content">
-        <div class="empty-state">
-            <div class="empty-icon">🎬</div>
-            <h2>No matches yet</h2>
-            <p>Start discovering movies to build your watchlist!</p>
-            <a href="/" class="btn btn-primary">Discover Movies</a>
+    @if (isLoading)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading your matches...</p>
+            </div>
         </div>
-    </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-container">
+            <div class="error-message">
+                <h2>⚠️ Something went wrong</h2>
+                <p>@errorMessage</p>
+                <button class="btn btn-retry" @onclick="LoadMatchesAsync">Try Again</button>
+            </div>
+        </div>
+    }
+    else if (matches.Any())
+    {
+        <div class="matches-content">
+            <div class="matches-grid">
+                @foreach (var match in matches)
+                {
+                    <div class="match-card">
+                        <div class="match-poster">
+                            @if (!string.IsNullOrEmpty(match.MoviePosterUrl))
+                            {
+                                <img src="@match.MoviePosterUrl" alt="@match.MovieTitle" />
+                            }
+                            else
+                            {
+                                <div class="placeholder-poster">🎬</div>
+                            }
+                        </div>
+                        <div class="match-info">
+                            <h3>@match.MovieTitle</h3>
+                            <p class="match-details">
+                                @if (!string.IsNullOrEmpty(match.MovieYear))
+                                {
+                                    <span class="year">@match.MovieYear</span>
+                                }
+                                @if (!string.IsNullOrEmpty(match.MovieGenres))
+                                {
+                                    <span> • @match.MovieGenres</span>
+                                }
+                            </p>
+                            <p class="match-date">Matched @match.InteractionDate.ToString("MMM d, yyyy")</p>
+                            
+                            @if (match.IsWatched)
+                            {
+                                <div class="watched-status">
+                                    ✅ Watched @if (match.WatchedDate.HasValue) { <span>on @match.WatchedDate.Value.ToString("MMM d")</span> }
+                                    @if (match.UserRating.HasValue)
+                                    {
+                                        <div class="user-rating">
+                                            @for (int i = 1; i <= 5; i++)
+                                            {
+                                                <span class="star @(i <= match.UserRating.Value ? "filled" : "")">⭐</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-small btn-watch" @onclick="() => MarkAsWatchedAsync(match.Id)">
+                                    Mark as Watched
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="matches-content">
+            <div class="empty-state">
+                <div class="empty-icon">🎬</div>
+                <h2>No matches yet</h2>
+                <p>Start discovering movies to build your watchlist!</p>
+                <a href="/" class="btn btn-primary">Discover Movies</a>
+            </div>
+        </div>
+    }
 </div>
 
 <style>
@@ -87,9 +170,136 @@
         text-decoration: none;
     }
 
+    .matches-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        padding: 20px 0;
+    }
+
+    .match-card {
+        background: rgba(255,255,255,0.1);
+        border-radius: 15px;
+        overflow: hidden;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        transition: transform 0.2s;
+    }
+
+    .match-card:hover {
+        transform: translateY(-4px);
+    }
+
+    .match-poster {
+        height: 200px;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .match-poster img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .placeholder-poster {
+        font-size: 3rem;
+        opacity: 0.5;
+        color: #666;
+    }
+
+    .match-info {
+        padding: 20px;
+        color: white;
+    }
+
+    .match-info h3 {
+        margin: 0 0 10px 0;
+        font-size: 1.2rem;
+    }
+
+    .match-details {
+        color: rgba(255,255,255,0.8);
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+
+    .match-date {
+        color: rgba(255,255,255,0.6);
+        font-size: 0.8rem;
+        margin-bottom: 15px;
+    }
+
+    .watched-status {
+        color: #4ade80;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .user-rating {
+        margin-top: 5px;
+    }
+
+    .star {
+        font-size: 0.8rem;
+        opacity: 0.3;
+    }
+
+    .star.filled {
+        opacity: 1;
+    }
+
+    .btn-small {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+    }
+
+    .btn-watch {
+        background: #10b981;
+        color: white;
+    }
+
+    .loading-container, .error-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 400px;
+    }
+
+    .loading-spinner, .error-message {
+        text-align: center;
+        background: rgba(255,255,255,0.1);
+        padding: 40px;
+        border-radius: 20px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255,255,255,0.3);
+        border-top: 4px solid #ffffff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
     @@media (max-width: 768px) {
         .matches-header h1 {
             font-size: 2rem;
+        }
+        
+        .matches-grid {
+            grid-template-columns: 1fr;
+            gap: 15px;
         }
         
         .empty-state {
@@ -98,3 +308,49 @@
         }
     }
 </style>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private List<UserMovieInteraction> matches = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMatchesAsync();
+    }
+
+    private async Task LoadMatchesAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            matches = await InteractionService.GetMatchedMoviesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load matches: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkAsWatchedAsync(int interactionId)
+    {
+        try
+        {
+            await InteractionService.MarkAsWatchedAsync(interactionId);
+            await LoadMatchesAsync(); // Refresh the list
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to mark as watched: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+}

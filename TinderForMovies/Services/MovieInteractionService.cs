@@ -6,21 +6,26 @@ namespace TinderForMovies.Services;
 
 public class MovieInteractionService : IMovieInteractionService
 {
-    private readonly MovieDbContext _context;
+    private readonly IServiceProvider _serviceProvider;
 
-    public MovieInteractionService(MovieDbContext context)
+    public MovieInteractionService(IServiceProvider serviceProvider)
     {
-        _context = context;
+        _serviceProvider = serviceProvider;
     }
 
     public async Task<bool> HasUserInteractedWithMovieAsync(int movieId)
     {
-        return await _context.UserMovieInteractions
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        return await context.UserMovieInteractions
             .AnyAsync(i => i.MovieId == movieId);
     }
 
     public async Task SaveMatchAsync(Movie movie)
     {
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        
         var interaction = new UserMovieInteraction
         {
             MovieId = movie.Id,
@@ -34,12 +39,15 @@ public class MovieInteractionService : IMovieInteractionService
             InteractionDate = DateTime.UtcNow
         };
 
-        _context.UserMovieInteractions.Add(interaction);
-        await _context.SaveChangesAsync();
+        context.UserMovieInteractions.Add(interaction);
+        await context.SaveChangesAsync();
     }
 
     public async Task SaveRejectionAsync(Movie movie)
     {
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        
         var interaction = new UserMovieInteraction
         {
             MovieId = movie.Id,
@@ -53,13 +61,15 @@ public class MovieInteractionService : IMovieInteractionService
             InteractionDate = DateTime.UtcNow
         };
 
-        _context.UserMovieInteractions.Add(interaction);
-        await _context.SaveChangesAsync();
+        context.UserMovieInteractions.Add(interaction);
+        await context.SaveChangesAsync();
     }
 
     public async Task<List<UserMovieInteraction>> GetMatchedMoviesAsync()
     {
-        return await _context.UserMovieInteractions
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        return await context.UserMovieInteractions
             .Where(i => i.InteractionType == InteractionType.Matched)
             .OrderByDescending(i => i.InteractionDate)
             .ToListAsync();
@@ -67,7 +77,9 @@ public class MovieInteractionService : IMovieInteractionService
 
     public async Task<List<UserMovieInteraction>> GetRejectedMoviesAsync()
     {
-        return await _context.UserMovieInteractions
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        return await context.UserMovieInteractions
             .Where(i => i.InteractionType == InteractionType.Rejected)
             .OrderByDescending(i => i.InteractionDate)
             .ToListAsync();
@@ -75,7 +87,10 @@ public class MovieInteractionService : IMovieInteractionService
 
     public async Task MarkAsWatchedAsync(int interactionId, int? userRating = null, string? userReview = null)
     {
-        var interaction = await _context.UserMovieInteractions
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        
+        var interaction = await context.UserMovieInteractions
             .FirstOrDefaultAsync(i => i.Id == interactionId);
 
         if (interaction != null)
@@ -85,13 +100,16 @@ public class MovieInteractionService : IMovieInteractionService
             interaction.UserRating = userRating;
             interaction.UserReview = userReview;
             
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         }
     }
 
     public async Task UnmarkAsWatchedAsync(int interactionId)
     {
-        var interaction = await _context.UserMovieInteractions
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        
+        var interaction = await context.UserMovieInteractions
             .FirstOrDefaultAsync(i => i.Id == interactionId);
 
         if (interaction != null)
@@ -101,25 +119,30 @@ public class MovieInteractionService : IMovieInteractionService
             interaction.UserRating = null;
             interaction.UserReview = null;
             
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         }
     }
 
     public async Task RemoveMatchAsync(int interactionId)
     {
-        var interaction = await _context.UserMovieInteractions
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        
+        var interaction = await context.UserMovieInteractions
             .FirstOrDefaultAsync(i => i.Id == interactionId);
 
         if (interaction != null)
         {
-            _context.UserMovieInteractions.Remove(interaction);
-            await _context.SaveChangesAsync();
+            context.UserMovieInteractions.Remove(interaction);
+            await context.SaveChangesAsync();
         }
     }
 
     public async Task<UserMovieInteraction?> GetInteractionAsync(int interactionId)
     {
-        return await _context.UserMovieInteractions
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+        return await context.UserMovieInteractions
             .FirstOrDefaultAsync(i => i.Id == interactionId);
     }
 }
