@@ -62,7 +62,11 @@
         <!-- Embed CSV file as resource for code access -->
         <EmbeddedResource Include="Resources\Raw\movies.csv" />
         
-        <!-- Configuration files -->
+        <!-- Embed configuration files as resources for reliable access on all platforms -->
+        <EmbeddedResource Include="appsettings.json" />
+        <EmbeddedResource Include="appsettings.local.json" Condition="Exists('appsettings.local.json')" />
+        
+        <!-- Configuration files as assets (for platforms that support file system access) -->
         <MauiAsset Include="appsettings.json" LogicalName="appsettings.json" />
         <MauiAsset Include="appsettings.local.json" LogicalName="appsettings.local.json" Condition="Exists('appsettings.local.json')" />
     </ItemGroup>

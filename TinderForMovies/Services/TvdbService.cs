@@ -29,6 +29,10 @@ public class TvdbService : ITvdbService
         if (!string.IsNullOrEmpty(_authToken) && DateTime.UtcNow < _tokenExpiry)
             return;
 
+        // Debug logging to check what API key is being used
+        System.Diagnostics.Debug.WriteLine($"API Key loaded: {(!string.IsNullOrEmpty(_settings.ApiKey) ? _settings.ApiKey.Substring(0, 8) + "..." : "EMPTY")}");
+        System.Diagnostics.Debug.WriteLine($"Base URL: {_settings.BaseUrl}");
+
         // Create auth request - only include PIN if it's not empty
         object authRequest;
         if (string.IsNullOrEmpty(_settings.Pin))
