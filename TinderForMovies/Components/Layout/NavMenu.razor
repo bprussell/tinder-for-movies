@@ -1,12 +1,34 @@
-﻿<nav class="floating-nav">
-    <div class="nav-container">
-        <NavLink class="nav-tab" href="" Match="NavLinkMatch.All">
-            <span class="nav-icon">🎬</span>
-            <span class="nav-label">Discover</span>
-        </NavLink>
-        <NavLink class="nav-tab" href="matches">
-            <span class="nav-icon">❤️</span>
-            <span class="nav-label">Matches</span>
-        </NavLink>
-    </div>
+﻿@inject NavigationManager Navigation
+@implements IDisposable
+
+<nav class="floating-nav">
+    @if (!IsOnMatchesPage)
+    {
+        <!-- Show heart to go to matches when on discover page -->
+        <a class="nav-button" href="/matches">❤️</a>
+    }
+    else
+    {
+        <!-- Show clapper board to go to discover when on matches page -->
+        <a class="nav-button" href="/">🎬</a>
+    }
 </nav>
+
+@code {
+    private bool IsOnMatchesPage => Navigation.Uri.EndsWith("/matches");
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}
