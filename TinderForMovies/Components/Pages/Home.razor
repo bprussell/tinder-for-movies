@@ -14,9 +14,18 @@
     @if (isLoading)
     {
         <div class="loading-container">
-            <div class="loading-spinner">
-                <div class="spinner"></div>
-                <p>Finding great movies...</p>
+            <div class="movie-skeleton">
+                <div class="skeleton-poster"></div>
+                <div class="skeleton-info">
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-details"></div>
+                    <div class="skeleton-rating"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-text short"></div>
+                </div>
+            </div>
+            <div class="loading-text">
+                <div class="shimmer-text">Finding great movies...</div>
             </div>
         </div>
     }
@@ -33,14 +42,17 @@
     else if (currentMovie != null)
     {
         <div class="movie-stack">
-            <MovieCard Movie="currentMovie" />
+            <MovieCard Movie="currentMovie" 
+                       OnSwipe="HandleSwipe"
+                       OnAnimationComplete="HandleAnimationComplete"
+                       @ref="currentMovieCard" />
         </div>
 
         <div class="action-buttons">
-            <button class="btn btn-reject" @onclick="PassMovie">
+            <button class="btn btn-reject" @onclick="PassMovieButton" disabled="@isProcessingSwipe">
                 <span>👎 Pass</span>
             </button>
-            <button class="btn btn-match" @onclick="MatchMovie">
+            <button class="btn btn-match" @onclick="MatchMovieButton" disabled="@isProcessingSwipe">
                 <span>❤️ Match</span>
             </button>
         </div>
@@ -148,30 +160,68 @@
         border-radius: 50px;
         font-size: 1.1rem;
         cursor: pointer;
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         font-weight: bold;
+        position: relative;
+        overflow: hidden;
+        min-width: 120px;
     }
 
     .btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+        transform: none !important;
+        box-shadow: none !important;
     }
 
     .btn:not(:disabled):hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        transform: translateY(-3px) scale(1.05);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+
+    .btn:not(:disabled):active {
+        transform: translateY(-1px) scale(1.02);
+        transition: all 0.1s ease;
     }
 
     .btn-reject {
-        background: #ff4458;
+        background: linear-gradient(135deg, #ff4458, #ff6b7a);
         color: white;
-        min-width: 120px;
+    }
+
+    .btn-reject:not(:disabled):hover {
+        background: linear-gradient(135deg, #ff6b7a, #ff4458);
+        box-shadow: 0 8px 25px rgba(255, 68, 88, 0.4);
     }
 
     .btn-match {
-        background: #42a76a;
+        background: linear-gradient(135deg, #42a76a, #5cbf84);
         color: white;
-        min-width: 120px;
+    }
+
+    .btn-match:not(:disabled):hover {
+        background: linear-gradient(135deg, #5cbf84, #42a76a);
+        box-shadow: 0 8px 25px rgba(66, 167, 106, 0.4);
+    }
+
+    .btn span {
+        position: relative;
+        z-index: 1;
+    }
+
+    .btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.6s;
+    }
+
+    .btn:not(:disabled):hover::before {
+        left: 100%;
     }
 
     @@media (max-width: 768px) {
@@ -191,33 +241,106 @@
 
     .loading-container, .error-container, .empty-container {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
         min-height: 500px;
     }
 
-    .loading-spinner, .error-message, .empty-message {
+    .movie-skeleton {
+        width: 300px;
+        height: 500px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 15px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 30px;
+    }
+
+    .skeleton-poster {
+        height: 60%;
+        background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+    }
+
+    .skeleton-info {
+        padding: 20px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .skeleton-title, .skeleton-details, .skeleton-rating, .skeleton-text {
+        background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 100%);
+        background-size: 200% 100%;
+        border-radius: 4px;
+        animation: shimmer 1.5s infinite;
+    }
+
+    .skeleton-title {
+        height: 24px;
+        width: 80%;
+        animation-delay: 0.1s;
+    }
+
+    .skeleton-details {
+        height: 16px;
+        width: 60%;
+        animation-delay: 0.2s;
+    }
+
+    .skeleton-rating {
+        height: 16px;
+        width: 40%;
+        animation-delay: 0.3s;
+    }
+
+    .skeleton-text {
+        height: 14px;
+        width: 100%;
+    }
+
+    .skeleton-text:nth-child(4) {
+        animation-delay: 0.4s;
+    }
+
+    .skeleton-text.short {
+        width: 70%;
+        animation-delay: 0.5s;
+    }
+
+    .loading-text {
+        text-align: center;
+    }
+
+    .shimmer-text {
+        font-size: 1.1rem;
+        color: rgba(255,255,255,0.8);
+        animation: fadeInOut 2s infinite;
+    }
+
+    @@keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+
+    @@keyframes fadeInOut {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+    }
+
+    .error-message, .empty-message {
         text-align: center;
         background: rgba(255,255,255,0.1);
         padding: 40px;
         border-radius: 20px;
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255,255,255,0.2);
-    }
-
-    .spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid rgba(255,255,255,0.3);
-        border-top: 4px solid #ffffff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 20px;
-    }
-
-    @@keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
     }
 
     .btn-retry {
@@ -241,10 +364,12 @@
 @code {
     private bool isLoading = false;  // Start as false to allow initial load
     private bool isLoadingInProgress = false;  // Track actual loading state
+    private bool isProcessingSwipe = false;  // Track swipe processing state
     private string? errorMessage;
     private Movie? currentMovie;
     private List<Movie> movieQueue = new();
     private int currentPage = 1;
+    private MovieCard? currentMovieCard;
 
     protected override async Task OnInitializedAsync()
     {
@@ -387,53 +512,63 @@
 
     private async Task PassMovie()
     {
-        if (currentMovie != null)
-        {
-            try
-            {
-                await InteractionService.SaveRejectionAsync(currentMovie);
-                ShowNextMovie();
-            }
-            catch (Exception ex)
-            {
-                // Log error and show user feedback
-                System.Diagnostics.Debug.WriteLine($"Error saving rejection: {ex.Message}");
-                errorMessage = $"Failed to save rejection: {ex.Message}";
-                // Still advance to next movie to not block the user
-                ShowNextMovie();
-            }
-        }
-        else
-        {
-            ShowNextMovie();
-        }
-        
-        StateHasChanged();
+        await PassMovieButton();
     }
 
     private async Task MatchMovie()
     {
-        if (currentMovie != null)
+        await MatchMovieButton();
+    }
+
+    // New swipe handling methods
+    private async Task HandleSwipe(bool isLike)
+    {
+        if (currentMovie == null || isProcessingSwipe) return;
+        
+        isProcessingSwipe = true;
+        
+        try
         {
-            try
+            if (isLike)
             {
                 await InteractionService.SaveMatchAsync(currentMovie);
-                ShowNextMovie();
+                System.Diagnostics.Debug.WriteLine($"Swiped right (matched): {currentMovie.Title}");
             }
-            catch (Exception ex)
+            else
             {
-                // Log error and show user feedback
-                System.Diagnostics.Debug.WriteLine($"Error saving match: {ex.Message}");
-                errorMessage = $"Failed to save match: {ex.Message}";
-                // Still advance to next movie to not block the user
-                ShowNextMovie();
+                await InteractionService.SaveRejectionAsync(currentMovie);
+                System.Diagnostics.Debug.WriteLine($"Swiped left (rejected): {currentMovie.Title}");
             }
         }
-        else
+        catch (Exception ex)
         {
-            ShowNextMovie();
+            System.Diagnostics.Debug.WriteLine($"Error saving swipe: {ex.Message}");
+            errorMessage = $"Failed to save {(isLike ? "match" : "rejection")}: {ex.Message}";
         }
-        
+    }
+
+    private void HandleAnimationComplete()
+    {
+        ShowNextMovie();
+        isProcessingSwipe = false;
         StateHasChanged();
     }
+
+    // Button handlers that trigger swipe animations
+    private async Task PassMovieButton()
+    {
+        if (currentMovieCard != null && !isProcessingSwipe)
+        {
+            await currentMovieCard.TriggerSwipeAnimation(false);
+        }
+    }
+
+    private async Task MatchMovieButton()
+    {
+        if (currentMovieCard != null && !isProcessingSwipe)
+        {
+            await currentMovieCard.TriggerSwipeAnimation(true);
+        }
+    }
+
 }

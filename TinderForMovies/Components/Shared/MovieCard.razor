@@ -1,6 +1,18 @@
 @using TinderForMovies.Models
 
-<div class="movie-card">
+<div class="movie-card" 
+     id="movie-card-@Movie.Id"
+     @ontouchstart="OnTouchStart"
+     @ontouchmove="OnTouchMove" 
+     @ontouchend="OnTouchEnd"
+     @onmousedown="OnMouseDown"
+     @onmousemove="OnMouseMove"
+     @onmouseup="OnMouseUp"
+     @onmouseleave="OnMouseUp"
+     style="transform: @GetTransform(); opacity: @GetOpacity();"
+     data-swipe-threshold="100"
+     data-rotation-factor="0.1"
+     data-swipe-direction="@GetSwipeDirection()">
     <div class="movie-poster">
         @if (!string.IsNullOrEmpty(Movie.PosterUrl))
         {
@@ -51,7 +63,56 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        transition: transform 0.3s ease;
+        transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                    opacity 0.2s ease,
+                    box-shadow 0.2s ease;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        touch-action: none;
+        will-change: transform, opacity;
+    }
+
+    .movie-card:active {
+        cursor: grabbing;
+    }
+
+    .movie-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, transparent 40%, rgba(76, 175, 80, 0.1) 100%);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .movie-card::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(-45deg, transparent 40%, rgba(244, 67, 54, 0.1) 100%);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .movie-card[data-swipe-direction="right"]::before {
+        opacity: 1;
+    }
+
+    .movie-card[data-swipe-direction="left"]::after {
+        opacity: 1;
     }
 
     .movie-poster {
@@ -82,6 +143,9 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        position: relative;
+        z-index: 2;
+        background: white;
     }
 
     .movie-info h2 {
@@ -134,4 +198,177 @@
 
 @code {
     [Parameter] public Movie Movie { get; set; } = new();
+    [Parameter] public EventCallback<bool> OnSwipe { get; set; }
+    [Parameter] public EventCallback OnAnimationComplete { get; set; }
+
+    private bool _isDragging = false;
+    private float _dragX = 0;
+    private float _dragY = 0;
+    private float _startX = 0;
+    private float _startY = 0;
+    private float _swipeThreshold = 100;
+    private bool _isAnimating = false;
+
+    private string GetTransform()
+    {
+        if (_isAnimating) return "";
+        
+        var rotation = _dragX * 0.1f; // Rotate based on horizontal drag
+        var scale = Math.Max(0.95f, 1 - Math.Abs(_dragX) * 0.0005f); // Slight scale down when dragging
+        
+        return $"translate3d({_dragX}px, {_dragY}px, 0) rotate({rotation}deg) scale({scale})";
+    }
+
+    private string GetOpacity()
+    {
+        if (_isAnimating) return "1";
+        
+        var dragDistance = Math.Abs(_dragX);
+        var maxDistance = 200;
+        var opacity = Math.Max(0.6f, 1 - (dragDistance / maxDistance) * 0.4f);
+        
+        return opacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private string GetSwipeDirection()
+    {
+        if (Math.Abs(_dragX) < 50) return "";
+        return _dragX > 0 ? "right" : "left";
+    }
+
+    // Touch events
+    private void OnTouchStart(TouchEventArgs e)
+    {
+        if (_isAnimating || e.Touches.Length == 0) return;
+        
+        _isDragging = true;
+        _startX = (float)e.Touches[0].ClientX;
+        _startY = (float)e.Touches[0].ClientY;
+        _dragX = 0;
+        _dragY = 0;
+    }
+
+    private void OnTouchMove(TouchEventArgs e)
+    {
+        if (!_isDragging || _isAnimating || e.Touches.Length == 0) return;
+        
+        _dragX = (float)e.Touches[0].ClientX - _startX;
+        _dragY = (float)e.Touches[0].ClientY - _startY;
+        
+        StateHasChanged();
+    }
+
+    private async Task OnTouchEnd(TouchEventArgs e)
+    {
+        if (!_isDragging || _isAnimating) return;
+        
+        await HandleSwipeEnd();
+    }
+
+    // Mouse events (for desktop)
+    private void OnMouseDown(MouseEventArgs e)
+    {
+        if (_isAnimating) return;
+        
+        _isDragging = true;
+        _startX = (float)e.ClientX;
+        _startY = (float)e.ClientY;
+        _dragX = 0;
+        _dragY = 0;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        if (!_isDragging || _isAnimating) return;
+        
+        _dragX = (float)e.ClientX - _startX;
+        _dragY = (float)e.ClientY - _startY;
+        
+        StateHasChanged();
+    }
+
+    private async Task OnMouseUp(MouseEventArgs e)
+    {
+        if (!_isDragging || _isAnimating) return;
+        
+        await HandleSwipeEnd();
+    }
+
+    private async Task HandleSwipeEnd()
+    {
+        _isDragging = false;
+        
+        var swipeDirection = Math.Abs(_dragX) > _swipeThreshold;
+        var isLike = _dragX > _swipeThreshold;
+        var isReject = _dragX < -_swipeThreshold;
+        
+        if (swipeDirection && (isLike || isReject))
+        {
+            // Animate card off screen
+            await AnimateCardExit(isLike);
+            
+            // Trigger swipe callback
+            if (OnSwipe.HasDelegate)
+            {
+                await OnSwipe.InvokeAsync(isLike);
+            }
+        }
+        else
+        {
+            // Snap back to center
+            await AnimateCardReturn();
+        }
+    }
+
+    private async Task AnimateCardExit(bool isLike)
+    {
+        _isAnimating = true;
+        
+        // Use CSS animation to slide card off screen
+        var exitDirection = isLike ? "swipe-right" : "swipe-left";
+        await InvokeAsync(() =>
+        {
+            StateHasChanged();
+        });
+        
+        // Wait for animation
+        await Task.Delay(300);
+        
+        if (OnAnimationComplete.HasDelegate)
+        {
+            await OnAnimationComplete.InvokeAsync();
+        }
+        
+        _isAnimating = false;
+        ResetCard();
+    }
+
+    private async Task AnimateCardReturn()
+    {
+        _isAnimating = true;
+        _dragX = 0;
+        _dragY = 0;
+        
+        await InvokeAsync(() =>
+        {
+            StateHasChanged();
+        });
+        
+        await Task.Delay(200);
+        _isAnimating = false;
+    }
+
+    public async Task TriggerSwipeAnimation(bool isLike)
+    {
+        _dragX = isLike ? _swipeThreshold + 50 : -(_swipeThreshold + 50);
+        await AnimateCardExit(isLike);
+    }
+
+    private void ResetCard()
+    {
+        _dragX = 0;
+        _dragY = 0;
+        _isDragging = false;
+        _isAnimating = false;
+    }
 }
