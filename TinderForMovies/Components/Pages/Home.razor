@@ -3,6 +3,7 @@
 @using TinderForMovies.Services
 @using TinderForMovies.Components.Shared
 @inject ITvdbService TvdbService
+@inject IMovieInteractionService InteractionService
 
 <div class="discover-container">
     <div class="app-header">
@@ -260,12 +261,28 @@
             var movies = await TvdbService.GetPopularMoviesAsync(currentPage);
             if (movies.Any())
             {
-                movieQueue.AddRange(movies);
+                // Filter out movies the user has already interacted with
+                var newMovies = new List<Movie>();
+                foreach (var movie in movies)
+                {
+                    if (!await InteractionService.HasUserInteractedWithMovieAsync(movie.Id))
+                    {
+                        newMovies.Add(movie);
+                    }
+                }
+                
+                movieQueue.AddRange(newMovies);
                 if (currentMovie == null)
                 {
                     ShowNextMovie();
                 }
                 currentPage++;
+                
+                // If we filtered out too many movies, try loading the next page
+                if (newMovies.Count < 3 && movieQueue.Count < 5)
+                {
+                    await LoadMoviesAsync();
+                }
             }
             else if (currentMovie == null)
             {
@@ -302,16 +319,40 @@
         }
     }
 
-    private void PassMovie()
+    private async Task PassMovie()
     {
-        // TODO: Store the rejection in local storage or service
+        if (currentMovie != null)
+        {
+            try
+            {
+                await InteractionService.SaveRejectionAsync(currentMovie);
+            }
+            catch (Exception ex)
+            {
+                // Log error but continue
+                System.Diagnostics.Debug.WriteLine($"Error saving rejection: {ex.Message}");
+            }
+        }
+        
         ShowNextMovie();
         StateHasChanged();
     }
 
-    private void MatchMovie()
+    private async Task MatchMovie()
     {
-        // TODO: Store the match in local storage or service
+        if (currentMovie != null)
+        {
+            try
+            {
+                await InteractionService.SaveMatchAsync(currentMovie);
+            }
+            catch (Exception ex)
+            {
+                // Log error but continue
+                System.Diagnostics.Debug.WriteLine($"Error saving match: {ex.Message}");
+            }
+        }
+        
         ShowNextMovie();
         StateHasChanged();
     }

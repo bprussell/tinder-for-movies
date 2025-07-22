@@ -1,7 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using TinderForMovies.Configuration;
 using TinderForMovies.Services;
+using TinderForMovies.Data;
 
 namespace TinderForMovies
 {
@@ -27,15 +29,31 @@ namespace TinderForMovies
             builder.Services.Configure<TvdbSettings>(
                 builder.Configuration.GetSection(TvdbSettings.SectionName));
 
+            // Add database
+            var dbPath = Path.Combine(FileSystem.AppDataDirectory, "movies.db");
+            builder.Services.AddDbContext<MovieDbContext>(options =>
+                options.UseSqlite($"Data Source={dbPath}"));
+
             // Add HTTP client and services
             builder.Services.AddHttpClient<ITvdbService, TvdbService>();
+            builder.Services.AddScoped<IMovieInteractionService, MovieInteractionService>();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
 #endif
 
-            return builder.Build();
+            var app = builder.Build();
+
+            // Initialize database on startup
+            Task.Run(async () =>
+            {
+                using var scope = app.Services.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+                await DatabaseInitializer.InitializeAsync(context);
+            });
+
+            return app;
         }
     }
 }
