@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TinderForMovies.Configuration;
 using TinderForMovies.Models;
+using System.Reflection;
 
 namespace TinderForMovies.Services;
 
@@ -13,6 +14,8 @@ public class TvdbService : ITvdbService
     private readonly TvdbSettings _settings;
     private string? _authToken;
     private DateTime _tokenExpiry = DateTime.MinValue;
+    private static List<string>? _movieTitles;
+    private static readonly object _lockObject = new object();
 
     public TvdbService(HttpClient httpClient, IOptions<TvdbSettings> settings)
     {
@@ -63,10 +66,150 @@ public class TvdbService : ITvdbService
             new AuthenticationHeaderValue("Bearer", _authToken);
     }
 
-    public async Task<List<Movie>> GetPopularMoviesAsync(int page = 1)
+    private List<string> LoadMovieTitles()
     {
-        // Use a much larger list of specific movie titles to avoid generic search issues
-        var movieTitles = new[]
+        if (_movieTitles != null)
+            return _movieTitles;
+
+        lock (_lockObject)
+        {
+            if (_movieTitles != null)
+                return _movieTitles;
+
+            try
+            {
+                // Try to load from CSV file first
+                var assembly = Assembly.GetExecutingAssembly();
+                var resourceName = "TinderForMovies.Resources.Raw.movies.csv";
+                
+                using var stream = assembly.GetManifestResourceStream(resourceName);
+                if (stream != null)
+                {
+                    using var reader = new StreamReader(stream);
+                    var csvContent = reader.ReadToEnd(); // Use synchronous ReadToEnd()
+                    
+                    _movieTitles = ParseCsvMovieTitles(csvContent);
+                    System.Diagnostics.Debug.WriteLine($"Loaded {_movieTitles.Count} movies from CSV file");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("CSV file not found as embedded resource, using fallback movie list");
+                    _movieTitles = GetFallbackMovieTitles();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading CSV file: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine("Using fallback movie list");
+                _movieTitles = GetFallbackMovieTitles();
+            }
+
+            return _movieTitles;
+        }
+    }
+
+    private List<string> ParseCsvMovieTitles(string csvContent)
+    {
+        var titles = new List<string>();
+        var lines = csvContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        
+        if (lines.Length <= 1)
+        {
+            System.Diagnostics.Debug.WriteLine("CSV file appears empty or only has header");
+            return GetFallbackMovieTitles();
+        }
+
+        // Skip header row (first line contains "movieId,title,genres")
+        for (int i = 1; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            try
+            {
+                // Parse CSV line - handle quoted fields properly
+                var title = ExtractTitleFromCsvLine(line);
+                if (!string.IsNullOrEmpty(title))
+                {
+                    // Clean up title - remove year suffix like "(1995)" for search purposes
+                    var cleanTitle = CleanMovieTitle(title);
+                    if (!string.IsNullOrEmpty(cleanTitle) && cleanTitle.Length > 1)
+                    {
+                        titles.Add(cleanTitle);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error parsing CSV line {i}: {ex.Message}");
+                // Continue with next line
+            }
+        }
+
+        return titles.Count > 0 ? titles : GetFallbackMovieTitles();
+    }
+
+    private string ExtractTitleFromCsvLine(string csvLine)
+    {
+        // Simple CSV parsing for format: movieId,title,genres
+        // Handle quoted fields that may contain commas
+        
+        var inQuotes = false;
+        var fieldIndex = 0;
+        var currentField = new StringBuilder();
+        
+        for (int i = 0; i < csvLine.Length; i++)
+        {
+            var ch = csvLine[i];
+            
+            if (ch == '"')
+            {
+                inQuotes = !inQuotes;
+            }
+            else if (ch == ',' && !inQuotes)
+            {
+                if (fieldIndex == 1) // Title is field index 1
+                {
+                    return currentField.ToString().Trim();
+                }
+                fieldIndex++;
+                currentField.Clear();
+            }
+            else
+            {
+                currentField.Append(ch);
+            }
+        }
+        
+        // If we ended on field 1 (title), return it
+        if (fieldIndex == 1)
+        {
+            return currentField.ToString().Trim();
+        }
+        
+        return string.Empty;
+    }
+
+    private string CleanMovieTitle(string title)
+    {
+        if (string.IsNullOrEmpty(title))
+            return string.Empty;
+            
+        // Remove year suffix like "(1995)" or "(2023)"
+        var yearPattern = @"\s*\(\d{4}\)\s*$";
+        var cleanTitle = System.Text.RegularExpressions.Regex.Replace(title, yearPattern, "").Trim();
+        
+        // Remove alternate title patterns like "(a.k.a. Something)"
+        var akaPattern = @"\s*\(a\.k\.a\..+?\)\s*";
+        cleanTitle = System.Text.RegularExpressions.Regex.Replace(cleanTitle, akaPattern, "").Trim();
+        
+        return cleanTitle;
+    }
+
+    private List<string> GetFallbackMovieTitles()
+    {
+        // Fallback to hardcoded list if CSV loading fails
+        return new List<string>
         {
             // Classics
             "The Shawshank Redemption", "The Godfather", "The Dark Knight", "Pulp Fiction",
@@ -79,59 +222,25 @@ public class TvdbService : ITvdbService
             "Avatar", "Avengers", "Spider-Man", "Batman", "Superman", "Iron Man",
             "The Dark Knight Rises", "Interstellar", "Dunkirk", "Joker",
             "Parasite", "1917", "Once Upon a Time in Hollywood", "Jojo Rabbit",
-            "Ford v Ferrari", "The Irishman", "Marriage Story", "Little Women",
-            
-            // Action movies
-            "Mad Max Fury Road", "John Wick", "Mission Impossible", "Fast and Furious",
-            "Die Hard", "Lethal Weapon", "Rush Hour", "The Bourne Identity",
-            "Casino Royale", "Skyfall", "Top Gun", "Heat", "Speed", "Face/Off",
-            
-            // Comedies
-            "Groundhog Day", "The Big Lebowski", "Anchorman", "Superbad",
-            "Pineapple Express", "Step Brothers", "Talladega Nights", "Wedding Crashers",
-            "Old School", "Meet the Parents", "There's Something About Mary", "Dumb and Dumber",
-            
-            // Horror/Thriller
-            "Get Out", "A Quiet Place", "Hereditary", "The Conjuring",
-            "Insidious", "Saw", "Scream", "Halloween", "Friday the 13th",
-            "The Exorcist", "Psycho", "Jaws", "The Thing", "Poltergeist",
-            
-            // Sci-Fi
-            "Blade Runner", "Minority Report", "Total Recall", "The Fifth Element",
-            "District 9", "Elysium", "Pacific Rim", "Edge of Tomorrow",
-            "Ex Machina", "Her", "Arrival", "Gravity", "Prometheus", "Aliens",
-            
-            // Romance/Drama
-            "Titanic", "The Notebook", "Casablanca", "When Harry Met Sally",
-            "Ghost", "Pretty Woman", "Sleepless in Seattle", "You've Got Mail",
-            "The Princess Bride", "Dirty Dancing", "Top Gun", "Jerry Maguire",
-            
-            // Animated
-            "Toy Story", "Finding Nemo", "The Incredibles", "Monsters Inc",
-            "Up", "WALL-E", "Inside Out", "Coco", "Moana", "Frozen",
-            "Shrek", "How to Train Your Dragon", "Kung Fu Panda", "Madagascar",
-            
-            // More recent hits
-            "Black Panther", "Wonder Woman", "Aquaman", "Captain Marvel",
-            "Endgame", "Infinity War", "Thor Ragnarok", "Guardians of the Galaxy",
-            "Doctor Strange", "Ant-Man", "Spider-Man Homecoming", "Civil War",
-            
-            // Classic franchises  
-            "Raiders of the Lost Ark", "E.T.", "Close Encounters", "Jaws",
-            "Rocky", "Rambo", "Terminator", "Predator", "RoboCop", "Total Recall",
-            "Demolition Man", "Judge Dredd", "The Running Man", "Eraser"
+            "Ford v Ferrari", "The Irishman", "Marriage Story", "Little Women"
         };
+    }
+
+    public async Task<List<Movie>> GetPopularMoviesAsync(int page = 1)
+    {
+        // Load movie titles from CSV file
+        var movieTitles = LoadMovieTitles();
 
         var movies = new List<Movie>();
         var moviesPerPage = 10;
         var startIndex = (page - 1) * moviesPerPage;
 
-        // Calculate how many complete cycles through the array we need
-        var cycleLength = movieTitles.Length;
+        // Calculate how many complete cycles through the list we need
+        var cycleLength = movieTitles.Count;
         var currentCycle = startIndex / cycleLength;
         var indexInCycle = startIndex % cycleLength;
 
-        System.Diagnostics.Debug.WriteLine($"Page {page}: Starting at cycle {currentCycle}, index {indexInCycle}");
+        System.Diagnostics.Debug.WriteLine($"Page {page}: Starting at cycle {currentCycle}, index {indexInCycle}, total movies: {cycleLength}");
 
         var moviesAdded = 0;
         var attempts = 0;
