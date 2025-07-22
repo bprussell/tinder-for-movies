@@ -9,7 +9,7 @@
      @onmousemove="OnMouseMove"
      @onmouseup="OnMouseUp"
      @onmouseleave="OnMouseUp"
-     style="transform: @GetTransform(); opacity: @GetOpacity();"
+     style="transform: @GetTransform(); opacity: @GetOpacity(); box-shadow: @GetBoxShadow();"
      data-swipe-threshold="100"
      data-rotation-factor="0.1"
      data-swipe-direction="@GetSwipeDirection()">
@@ -62,7 +62,7 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        transition: opacity 0.2s ease, box-shadow 0.2s ease;
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         cursor: grab;
         user-select: none;
         -webkit-user-select: none;
@@ -85,7 +85,7 @@
         bottom: 0;
         background: linear-gradient(45deg, transparent 40%, rgba(76, 175, 80, 0.1) 100%);
         opacity: 0;
-        transition: opacity 0.2s ease;
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         pointer-events: none;
         z-index: 1;
     }
@@ -99,7 +99,7 @@
         bottom: 0;
         background: linear-gradient(-45deg, transparent 40%, rgba(244, 67, 54, 0.1) 100%);
         opacity: 0;
-        transition: opacity 0.2s ease;
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         pointer-events: none;
         z-index: 1;
     }
@@ -226,15 +226,19 @@
     private float _dragY = 0;
     private float _startX = 0;
     private float _startY = 0;
-    private float _swipeThreshold = 100;
+    private float _swipeThreshold = 80;
     private bool _isAnimating = false;
+    private float _currentRotation = 0;
 
     private string GetTransform()
     {
-        var rotation = _dragX * 0.1f; // Rotate based on horizontal drag
-        var scale = Math.Max(0.95f, 1 - Math.Abs(_dragX) * 0.0005f); // Slight scale down when dragging
+        var rotation = _isAnimating ? _currentRotation : _dragX * 0.15f; // Use stored rotation during animation
+        var scale = Math.Max(0.94f, 1 - Math.Abs(_dragX) * 0.0008f); // Slightly more scale effect
         
-        return $"translate3d({_dragX}px, {_dragY}px, 0) rotate({rotation}deg) scale({scale})";
+        // Add perspective transform for depth
+        var perspectiveX = _dragX * 0.002f;
+        
+        return $"translate3d({_dragX}px, {_dragY}px, 0) rotate({rotation}deg) scale({scale}) rotateY({perspectiveX}deg)";
     }
 
     private string GetOpacity()
@@ -252,6 +256,19 @@
     {
         if (Math.Abs(_dragX) < 50) return "";
         return _dragX > 0 ? "right" : "left";
+    }
+
+    private string GetBoxShadow()
+    {
+        if (_isAnimating) return "0 20px 60px rgba(0,0,0,0.4)";
+        
+        var dragDistance = Math.Abs(_dragX);
+        var baseShadow = 8;
+        var maxShadow = 20;
+        var shadowSize = baseShadow + (dragDistance / 100) * (maxShadow - baseShadow);
+        var shadowOpacity = 0.3f + (dragDistance / 200) * 0.1f;
+        
+        return $"0 {shadowSize}px {shadowSize * 3}px rgba(0,0,0,{shadowOpacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)})";
     }
 
     // Touch events
@@ -372,26 +389,43 @@
     {
         _isAnimating = true;
         
-        // Calculate the final off-screen position
-        var screenWidth = 400; // Approximate screen width
-        var finalX = isLike ? screenWidth : -screenWidth;
-        var finalRotation = isLike ? 30 : -30;
+        // Calculate the final off-screen position with momentum
+        var screenWidth = 500; // Increased for more dramatic exit
+        var velocityMultiplier = 1.5f; // Add momentum based on swipe velocity
+        var currentVelocity = Math.Abs(_dragX) / 100f;
+        var finalX = (isLike ? screenWidth : -screenWidth) * (1 + currentVelocity * 0.2f);
         
         // Start animation from current position to off-screen
         var startX = _dragX;
-        var startRotation = _dragX * 0.1f;
+        var startY = _dragY;
+        var startRotation = _dragX * 0.15f;
         
-        var animationDuration = 300; // milliseconds
-        var frames = 30; // 30 frames for smooth animation
+        var animationDuration = 450; // Slightly longer for more dramatic effect
+        var frames = 45; // More frames for smoother animation
         var frameDelay = animationDuration / frames;
+        
+        // Physics variables for realistic motion
+        var gravity = 0.5f;
+        var verticalVelocity = -2f; // Initial upward velocity
         
         for (int frame = 0; frame <= frames; frame++)
         {
             var progress = (float)frame / frames;
-            var easedProgress = EaseOutCubic(progress);
             
-            _dragX = startX + (finalX - startX) * easedProgress;
-            _dragY = _dragY - (progress * 20); // Slight upward movement for natural arc
+            // Use custom spring-loaded easing for more dynamic exit
+            var xEase = EaseOutExpo(progress);
+            var rotationEase = EaseOutBack(progress);
+            
+            // Horizontal movement with momentum
+            _dragX = startX + (finalX - startX) * xEase;
+            
+            // Vertical movement with gravity simulation
+            var timeFactor = progress * 2; // Speed up gravity effect
+            _dragY = startY + (verticalVelocity * timeFactor * 30) + (0.5f * gravity * timeFactor * timeFactor * 50);
+            
+            // Rotation increases as card flies away
+            var targetRotation = isLike ? 35 : -35;
+            _currentRotation = startRotation + (targetRotation - startRotation) * rotationEase;
             
             StateHasChanged();
             
@@ -412,6 +446,28 @@
     {
         return 1 - (float)Math.Pow(1 - t, 3);
     }
+    
+    private float EaseOutQuart(float t)
+    {
+        return 1 - (float)Math.Pow(1 - t, 4);
+    }
+    
+    private float EaseInOutQuad(float t)
+    {
+        return t < 0.5f ? 2 * t * t : 1 - (float)Math.Pow(-2 * t + 2, 2) / 2;
+    }
+    
+    private float EaseOutExpo(float t)
+    {
+        return t == 1f ? 1f : 1f - (float)Math.Pow(2, -10 * t);
+    }
+    
+    private float EaseOutBack(float t)
+    {
+        const float c1 = 1.70158f;
+        const float c3 = c1 + 1f;
+        return 1f + c3 * (float)Math.Pow(t - 1, 3) + c1 * (float)Math.Pow(t - 1, 2);
+    }
 
     private async Task AnimateCardReturn()
     {
@@ -424,7 +480,7 @@
             StateHasChanged();
         });
         
-        await Task.Delay(200);
+        await Task.Delay(300); // Match the CSS transition duration
         _isAnimating = false;
     }
 
@@ -432,9 +488,14 @@
     {
         if (_isAnimating) return;
         
-        // Set initial position for button-triggered swipe
-        _dragX = isLike ? _swipeThreshold * 0.8f : -(_swipeThreshold * 0.8f);
+        // Set initial position for button-triggered swipe with slight bounce
+        _dragX = isLike ? _swipeThreshold * 0.6f : -(_swipeThreshold * 0.6f);
         StateHasChanged();
+        await Task.Delay(50); // Small delay for visual effect
+        
+        _dragX = isLike ? _swipeThreshold * 0.9f : -(_swipeThreshold * 0.9f);
+        StateHasChanged();
+        await Task.Delay(50);
         
         await AnimateCardExit(isLike);
     }
@@ -445,5 +506,6 @@
         _dragY = 0;
         _isDragging = false;
         _isAnimating = false;
+        _currentRotation = 0;
     }
 }
