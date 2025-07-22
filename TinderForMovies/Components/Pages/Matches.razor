@@ -1,0 +1,100 @@
+@page "/matches"
+
+<div class="matches-container">
+    <div class="matches-header">
+        <h1>❤️ My Matches</h1>
+        <p>Movies you've swiped right on</p>
+    </div>
+
+    <div class="matches-content">
+        <div class="empty-state">
+            <div class="empty-icon">🎬</div>
+            <h2>No matches yet</h2>
+            <p>Start discovering movies to build your watchlist!</p>
+            <a href="/" class="btn btn-primary">Discover Movies</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .matches-container {
+        padding: 20px;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .matches-header {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+
+    .matches-header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .matches-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 60vh;
+    }
+
+    .empty-state {
+        text-align: center;
+        background: rgba(255,255,255,0.1);
+        padding: 60px 40px;
+        border-radius: 20px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        max-width: 400px;
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        opacity: 0.7;
+    }
+
+    .empty-state h2 {
+        margin-bottom: 15px;
+        font-size: 1.8rem;
+    }
+
+    .empty-state p {
+        margin-bottom: 30px;
+        opacity: 0.8;
+        font-size: 1.1rem;
+    }
+
+    .btn {
+        display: inline-block;
+        padding: 12px 24px;
+        background: #42a76a;
+        color: white;
+        text-decoration: none;
+        border-radius: 25px;
+        font-weight: bold;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    @@media (max-width: 768px) {
+        .matches-header h1 {
+            font-size: 2rem;
+        }
+        
+        .empty-state {
+            padding: 40px 20px;
+            margin: 0 20px;
+        }
+    }
+</style>
