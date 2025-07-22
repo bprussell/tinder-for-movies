@@ -1,4 +1,8 @@
 ﻿@page "/"
+@using TinderForMovies.Models
+@using TinderForMovies.Services
+@using TinderForMovies.Components.Shared
+@inject ITvdbService TvdbService
 
 <div class="discover-container">
     <div class="app-header">
@@ -6,34 +10,50 @@
         <p>Discover your next favorite movie</p>
     </div>
 
-    <div class="movie-stack">
-        <div class="movie-card">
-            <div class="movie-poster">
-                <div class="placeholder-poster">
-                    🎬
-                </div>
-            </div>
-            <div class="movie-info">
-                <h2>Ready to discover movies?</h2>
-                <p class="movie-details">
-                    <span class="year">2025</span> • 
-                    <span class="genre">Coming Soon</span>
-                </p>
-                <p class="synopsis">
-                    Start swiping to find movies you'll love. Swipe right to add to your matches, left to pass.
-                </p>
+    @if (isLoading)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Finding great movies...</p>
             </div>
         </div>
-    </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-container">
+            <div class="error-message">
+                <h2>⚠️ Something went wrong</h2>
+                <p>@errorMessage</p>
+                <button class="btn btn-retry" @onclick="LoadMoviesAsync">Try Again</button>
+            </div>
+        </div>
+    }
+    else if (currentMovie != null)
+    {
+        <div class="movie-stack">
+            <MovieCard Movie="currentMovie" />
+        </div>
 
-    <div class="action-buttons">
-        <button class="btn btn-reject" disabled>
-            <span>👎 Pass</span>
-        </button>
-        <button class="btn btn-match" disabled>
-            <span>❤️ Match</span>
-        </button>
-    </div>
+        <div class="action-buttons">
+            <button class="btn btn-reject" @onclick="PassMovie">
+                <span>👎 Pass</span>
+            </button>
+            <button class="btn btn-match" @onclick="MatchMovie">
+                <span>❤️ Match</span>
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="empty-container">
+            <div class="empty-message">
+                <h2>🎬 No more movies</h2>
+                <p>We've run out of movies for now. Check back later!</p>
+                <button class="btn btn-retry" @onclick="LoadMoviesAsync">Reload</button>
+            </div>
+        </div>
+    }
 </div>
 
 <style>
@@ -167,4 +187,132 @@
             gap: 20px;
         }
     }
+
+    .loading-container, .error-container, .empty-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 500px;
+    }
+
+    .loading-spinner, .error-message, .empty-message {
+        text-align: center;
+        background: rgba(255,255,255,0.1);
+        padding: 40px;
+        border-radius: 20px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255,255,255,0.3);
+        border-top: 4px solid #ffffff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .btn-retry {
+        background: #42a76a;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 25px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: 20px;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-retry:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
 </style>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private Movie? currentMovie;
+    private List<Movie> movieQueue = new();
+    private int currentPage = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMoviesAsync();
+    }
+
+    private async Task LoadMoviesAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var movies = await TvdbService.GetPopularMoviesAsync(currentPage);
+            if (movies.Any())
+            {
+                movieQueue.AddRange(movies);
+                if (currentMovie == null)
+                {
+                    ShowNextMovie();
+                }
+                currentPage++;
+            }
+            else if (currentMovie == null)
+            {
+                errorMessage = "No movies found. Please check your API configuration.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load movies: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowNextMovie()
+    {
+        if (movieQueue.Any())
+        {
+            currentMovie = movieQueue.First();
+            movieQueue.RemoveAt(0);
+            
+            // Load more movies when queue gets low
+            if (movieQueue.Count <= 2)
+            {
+                _ = Task.Run(LoadMoviesAsync);
+            }
+        }
+        else
+        {
+            currentMovie = null;
+        }
+    }
+
+    private void PassMovie()
+    {
+        // TODO: Store the rejection in local storage or service
+        ShowNextMovie();
+        StateHasChanged();
+    }
+
+    private void MatchMovie()
+    {
+        // TODO: Store the match in local storage or service
+        ShowNextMovie();
+        StateHasChanged();
+    }
+}

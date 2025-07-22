@@ -1,4 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using TinderForMovies.Configuration;
+using TinderForMovies.Services;
 
 namespace TinderForMovies
 {
@@ -15,6 +18,16 @@ namespace TinderForMovies
                 });
 
             builder.Services.AddMauiBlazorWebView();
+
+            // Add configuration
+            builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+            // Configure settings
+            builder.Services.Configure<TvdbSettings>(
+                builder.Configuration.GetSection(TvdbSettings.SectionName));
+
+            // Add HTTP client and services
+            builder.Services.AddHttpClient<ITvdbService, TvdbService>();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();

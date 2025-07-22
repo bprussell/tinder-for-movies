@@ -1,0 +1,137 @@
+@using TinderForMovies.Models
+
+<div class="movie-card">
+    <div class="movie-poster">
+        @if (!string.IsNullOrEmpty(Movie.PosterUrl))
+        {
+            <img src="@Movie.PosterUrl" alt="@Movie.Title" />
+        }
+        else
+        {
+            <div class="placeholder-poster">
+                🎬
+            </div>
+        }
+    </div>
+    <div class="movie-info">
+        <h2>@Movie.Title</h2>
+        <p class="movie-details">
+            <span class="year">@Movie.Year</span>
+            @if (!string.IsNullOrEmpty(Movie.GenreText))
+            {
+                <span> • </span>
+                <span class="genre">@Movie.GenreText</span>
+            }
+            @if (!string.IsNullOrEmpty(Movie.RuntimeText) && Movie.RuntimeText != "Unknown")
+            {
+                <span> • </span>
+                <span class="runtime">@Movie.RuntimeText</span>
+            }
+        </p>
+        @if (!string.IsNullOrEmpty(Movie.RatingText) && Movie.RatingText != "No rating")
+        {
+            <p class="rating">⭐ @Movie.RatingText</p>
+        }
+        <p class="synopsis">
+            @(string.IsNullOrEmpty(Movie.Overview) ? "No description available." : 
+              (Movie.Overview.Length > 200 ? Movie.Overview.Substring(0, 200) + "..." : Movie.Overview))
+        </p>
+    </div>
+</div>
+
+<style>
+    .movie-card {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        color: #333;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.3s ease;
+    }
+
+    .movie-poster {
+        height: 60%;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 1px solid #eee;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .movie-poster img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .placeholder-poster {
+        font-size: 4rem;
+        opacity: 0.5;
+    }
+
+    .movie-info {
+        padding: 20px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .movie-info h2 {
+        margin: 0 0 10px 0;
+        font-size: 1.5rem;
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .movie-details {
+        color: #666;
+        margin-bottom: 8px;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .rating {
+        color: #f59e0b;
+        margin-bottom: 10px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .synopsis {
+        color: #555;
+        line-height: 1.4;
+        font-size: 0.9rem;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+    }
+
+    .year {
+        font-weight: 600;
+    }
+
+    .genre {
+        color: #7c3aed;
+    }
+
+    .runtime {
+        color: #059669;
+    }
+</style>
+
+@code {
+    [Parameter] public Movie Movie { get; set; } = new();
+}
