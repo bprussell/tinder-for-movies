@@ -9,6 +9,12 @@
     <div class="app-header">
         <h1>🍿 Tinder for Movies</h1>
         <p>Discover your next favorite movie</p>
+        @if (currentMovie != null && !isProcessingSwipe)
+        {
+            <div class="swipe-hint">
+                <span class="hint-text">👈 Swipe left to pass • Swipe right to match 👉</span>
+            </div>
+        }
     </div>
 
     @if (isLoading)
@@ -48,14 +54,14 @@
                        @ref="currentMovieCard" />
         </div>
 
-        <div class="action-buttons">
-            <button class="btn btn-reject" @onclick="PassMovieButton" disabled="@isProcessingSwipe">
-                <span>👎 Pass</span>
-            </button>
-            <button class="btn btn-match" @onclick="MatchMovieButton" disabled="@isProcessingSwipe">
-                <span>❤️ Match</span>
-            </button>
-        </div>
+        @if (!string.IsNullOrEmpty(swipeFeedbackEmoji))
+        {
+            <div class="swipe-feedback">
+                <div class="feedback-emoji @swipeFeedbackClass">
+                    @swipeFeedbackEmoji
+                </div>
+            </div>
+        }
     }
     else
     {
@@ -89,6 +95,20 @@
         font-size: 2.5rem;
         margin-bottom: 10px;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .swipe-hint {
+        margin-top: 15px;
+        animation: fadeInOut 3s infinite;
+    }
+
+    .hint-text {
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.7);
+        background: rgba(255,255,255,0.1);
+        padding: 8px 16px;
+        border-radius: 20px;
+        backdrop-filter: blur(5px);
     }
 
     .movie-stack {
@@ -149,79 +169,29 @@
         font-size: 0.9rem;
     }
 
-    .action-buttons {
-        display: flex;
-        gap: 30px;
+    .swipe-feedback {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1000;
+        pointer-events: none;
     }
 
-    .btn {
-        padding: 15px 25px;
-        border: none;
-        border-radius: 50px;
-        font-size: 1.1rem;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        font-weight: bold;
-        position: relative;
-        overflow: hidden;
-        min-width: 120px;
+    .feedback-emoji {
+        font-size: 5rem;
+        animation: pulseAndFade 1s ease-out forwards;
+        text-shadow: 0 0 20px rgba(255,255,255,0.8);
     }
 
-    .btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none !important;
-        box-shadow: none !important;
+    .feedback-like {
+        color: #ff69b4;
+        filter: drop-shadow(0 0 10px #ff69b4);
     }
 
-    .btn:not(:disabled):hover {
-        transform: translateY(-3px) scale(1.05);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-    }
-
-    .btn:not(:disabled):active {
-        transform: translateY(-1px) scale(1.02);
-        transition: all 0.1s ease;
-    }
-
-    .btn-reject {
-        background: linear-gradient(135deg, #ff4458, #ff6b7a);
-        color: white;
-    }
-
-    .btn-reject:not(:disabled):hover {
-        background: linear-gradient(135deg, #ff6b7a, #ff4458);
-        box-shadow: 0 8px 25px rgba(255, 68, 88, 0.4);
-    }
-
-    .btn-match {
-        background: linear-gradient(135deg, #42a76a, #5cbf84);
-        color: white;
-    }
-
-    .btn-match:not(:disabled):hover {
-        background: linear-gradient(135deg, #5cbf84, #42a76a);
-        box-shadow: 0 8px 25px rgba(66, 167, 106, 0.4);
-    }
-
-    .btn span {
-        position: relative;
-        z-index: 1;
-    }
-
-    .btn::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: left 0.6s;
-    }
-
-    .btn:not(:disabled):hover::before {
-        left: 100%;
+    .feedback-reject {
+        color: #ff4458;
+        filter: drop-shadow(0 0 10px #ff4458);
     }
 
     @@media (max-width: 768px) {
@@ -234,8 +204,8 @@
             font-size: 2rem;
         }
         
-        .action-buttons {
-            gap: 20px;
+        .feedback-emoji {
+            font-size: 4rem;
         }
     }
 
@@ -334,6 +304,25 @@
         50% { opacity: 1; }
     }
 
+    @@keyframes pulseAndFade {
+        0% {
+            transform: scale(0.5);
+            opacity: 0;
+        }
+        30% {
+            transform: scale(1.3);
+            opacity: 1;
+        }
+        60% {
+            transform: scale(1.1);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 0;
+        }
+    }
+
     .error-message, .empty-message {
         text-align: center;
         background: rgba(255,255,255,0.1);
@@ -344,7 +333,7 @@
     }
 
     .btn-retry {
-        background: #42a76a;
+        background: linear-gradient(135deg, #42a76a, #5cbf84);
         color: white;
         border: none;
         padding: 12px 24px;
@@ -352,12 +341,12 @@
         font-weight: bold;
         cursor: pointer;
         margin-top: 20px;
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
 
     .btn-retry:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        transform: translateY(-3px) scale(1.05);
+        box-shadow: 0 8px 25px rgba(66, 167, 106, 0.4);
     }
 </style>
 
@@ -370,6 +359,8 @@
     private List<Movie> movieQueue = new();
     private int currentPage = 1;
     private MovieCard? currentMovieCard;
+    private string? swipeFeedbackEmoji;
+    private string? swipeFeedbackClass;
 
     protected override async Task OnInitializedAsync()
     {
@@ -510,22 +501,15 @@
         StateHasChanged();
     }
 
-    private async Task PassMovie()
-    {
-        await PassMovieButton();
-    }
-
-    private async Task MatchMovie()
-    {
-        await MatchMovieButton();
-    }
-
-    // New swipe handling methods
+    // Swipe handling methods
     private async Task HandleSwipe(bool isLike)
     {
         if (currentMovie == null || isProcessingSwipe) return;
         
         isProcessingSwipe = true;
+        
+        // Show feedback emoji
+        ShowSwipeFeedback(isLike);
         
         try
         {
@@ -547,28 +531,29 @@
         }
     }
 
+    private void ShowSwipeFeedback(bool isLike)
+    {
+        swipeFeedbackEmoji = isLike ? "❤️" : "👎";
+        swipeFeedbackClass = isLike ? "feedback-like" : "feedback-reject";
+        StateHasChanged();
+        
+        // Clear feedback after animation completes
+        _ = Task.Delay(1000).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                swipeFeedbackEmoji = null;
+                swipeFeedbackClass = null;
+                StateHasChanged();
+            });
+        });
+    }
+
     private void HandleAnimationComplete()
     {
         ShowNextMovie();
         isProcessingSwipe = false;
         StateHasChanged();
-    }
-
-    // Button handlers that trigger swipe animations
-    private async Task PassMovieButton()
-    {
-        if (currentMovieCard != null && !isProcessingSwipe)
-        {
-            await currentMovieCard.TriggerSwipeAnimation(false);
-        }
-    }
-
-    private async Task MatchMovieButton()
-    {
-        if (currentMovieCard != null && !isProcessingSwipe)
-        {
-            await currentMovieCard.TriggerSwipeAnimation(true);
-        }
     }
 
 }

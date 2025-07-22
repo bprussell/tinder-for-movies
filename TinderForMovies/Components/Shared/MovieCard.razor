@@ -63,9 +63,7 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-                    opacity 0.2s ease,
-                    box-shadow 0.2s ease;
+        transition: opacity 0.2s ease, box-shadow 0.2s ease;
         cursor: grab;
         user-select: none;
         -webkit-user-select: none;
@@ -211,8 +209,6 @@
 
     private string GetTransform()
     {
-        if (_isAnimating) return "";
-        
         var rotation = _dragX * 0.1f; // Rotate based on horizontal drag
         var scale = Math.Max(0.95f, 1 - Math.Abs(_dragX) * 0.0005f); // Slight scale down when dragging
         
@@ -304,14 +300,14 @@
         
         if (swipeDirection && (isLike || isReject))
         {
-            // Animate card off screen
-            await AnimateCardExit(isLike);
-            
-            // Trigger swipe callback
+            // Trigger swipe callback FIRST (while currentMovie is still correct)
             if (OnSwipe.HasDelegate)
             {
                 await OnSwipe.InvokeAsync(isLike);
             }
+            
+            // Then animate card off screen
+            await AnimateCardExit(isLike);
         }
         else
         {
@@ -324,15 +320,32 @@
     {
         _isAnimating = true;
         
-        // Use CSS animation to slide card off screen
-        var exitDirection = isLike ? "swipe-right" : "swipe-left";
-        await InvokeAsync(() =>
-        {
-            StateHasChanged();
-        });
+        // Calculate the final off-screen position
+        var screenWidth = 400; // Approximate screen width
+        var finalX = isLike ? screenWidth : -screenWidth;
+        var finalRotation = isLike ? 30 : -30;
         
-        // Wait for animation
-        await Task.Delay(300);
+        // Start animation from current position to off-screen
+        var startX = _dragX;
+        var startRotation = _dragX * 0.1f;
+        
+        var animationDuration = 300; // milliseconds
+        var frames = 30; // 30 frames for smooth animation
+        var frameDelay = animationDuration / frames;
+        
+        for (int frame = 0; frame <= frames; frame++)
+        {
+            var progress = (float)frame / frames;
+            var easedProgress = EaseOutCubic(progress);
+            
+            _dragX = startX + (finalX - startX) * easedProgress;
+            _dragY = _dragY - (progress * 20); // Slight upward movement for natural arc
+            
+            StateHasChanged();
+            
+            if (frame < frames)
+                await Task.Delay(frameDelay);
+        }
         
         if (OnAnimationComplete.HasDelegate)
         {
@@ -341,6 +354,11 @@
         
         _isAnimating = false;
         ResetCard();
+    }
+
+    private float EaseOutCubic(float t)
+    {
+        return 1 - (float)Math.Pow(1 - t, 3);
     }
 
     private async Task AnimateCardReturn()
@@ -360,7 +378,12 @@
 
     public async Task TriggerSwipeAnimation(bool isLike)
     {
-        _dragX = isLike ? _swipeThreshold + 50 : -(_swipeThreshold + 50);
+        if (_isAnimating) return;
+        
+        // Set initial position for button-triggered swipe
+        _dragX = isLike ? _swipeThreshold * 0.8f : -(_swipeThreshold * 0.8f);
+        StateHasChanged();
+        
         await AnimateCardExit(isLike);
     }
 
