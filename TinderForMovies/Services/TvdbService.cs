@@ -40,7 +40,7 @@ public class TvdbService : ITvdbService
         var json = JsonSerializer.Serialize(authRequest);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync("/login", content);
+        var response = await _httpClient.PostAsync("/v4/login", content);
         
         if (!response.IsSuccessStatusCode)
         {
@@ -103,7 +103,7 @@ public class TvdbService : ITvdbService
     {
         await EnsureAuthenticatedAsync();
 
-        var response = await _httpClient.GetAsync($"/search?query={Uri.EscapeDataString(query)}&type=movie");
+        var response = await _httpClient.GetAsync($"/v4/search?query={Uri.EscapeDataString(query)}&type=movie");
         
         if (!response.IsSuccessStatusCode)
         {
@@ -128,7 +128,7 @@ public class TvdbService : ITvdbService
     {
         await EnsureAuthenticatedAsync();
 
-        var response = await _httpClient.GetAsync($"/movies/{movieId}/extended");
+        var response = await _httpClient.GetAsync($"/v4/movies/{movieId}/extended");
         
         if (!response.IsSuccessStatusCode)
         {
