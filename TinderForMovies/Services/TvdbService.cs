@@ -26,11 +26,16 @@ public class TvdbService : ITvdbService
         if (!string.IsNullOrEmpty(_authToken) && DateTime.UtcNow < _tokenExpiry)
             return;
 
-        var authRequest = new
+        // Create auth request - only include PIN if it's not empty
+        object authRequest;
+        if (string.IsNullOrEmpty(_settings.Pin))
         {
-            apikey = _settings.ApiKey,
-            pin = _settings.Pin
-        };
+            authRequest = new { apikey = _settings.ApiKey };
+        }
+        else
+        {
+            authRequest = new { apikey = _settings.ApiKey, pin = _settings.Pin };
+        }
 
         var json = JsonSerializer.Serialize(authRequest);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -39,7 +44,8 @@ public class TvdbService : ITvdbService
         
         if (!response.IsSuccessStatusCode)
         {
-            throw new HttpRequestException($"TVDB authentication failed: {response.StatusCode}");
+            var errorContent = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"TVDB authentication failed: {response.StatusCode} - {errorContent}. URL: {_httpClient.BaseAddress}/login");
         }
 
         var responseContent = await response.Content.ReadAsStringAsync();
