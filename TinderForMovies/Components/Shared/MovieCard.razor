@@ -16,7 +16,7 @@
     <div class="movie-poster">
         @if (!string.IsNullOrEmpty(Movie.PosterUrl))
         {
-            <img src="@Movie.PosterUrl" alt="@Movie.Title" />
+            <img src="@Movie.PosterUrl" alt="@Movie.Title" draggable="false" />
         }
         else
         {
@@ -71,6 +71,11 @@
         touch-action: none;
         will-change: transform, opacity;
     }
+    
+    .movie-card * {
+        user-drag: none;
+        -webkit-user-drag: none;
+    }
 
     .movie-card:active {
         cursor: grabbing;
@@ -121,12 +126,23 @@
         border-bottom: 1px solid #eee;
         position: relative;
         overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
     }
 
     .movie-poster img {
         width: 100%;
         height: 100%;
         object-fit: cover;
+        user-drag: none;
+        -webkit-user-drag: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        pointer-events: none;
     }
 
     .placeholder-poster {
