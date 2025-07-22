@@ -147,9 +147,11 @@
 
     .movie-stack {
         position: relative;
-        width: 300px;
-        height: 500px;
-        margin-bottom: 30px;
+        width: min(400px, 92vw);
+        height: calc(100vh - 200px);
+        margin-bottom: 20px;
+        max-height: 700px;
+        min-height: 500px;
     }
 
     .movie-card {
@@ -230,8 +232,7 @@
 
     @@media (max-width: 768px) {
         .movie-stack {
-            width: 280px;
-            height: 450px;
+            height: calc(100vh - 180px);
         }
         
         .app-header h1 {
@@ -240,6 +241,13 @@
         
         .feedback-emoji {
             font-size: 4rem;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .movie-stack {
+            height: calc(100vh - 160px);
+            width: min(350px, 95vw);
         }
     }
 

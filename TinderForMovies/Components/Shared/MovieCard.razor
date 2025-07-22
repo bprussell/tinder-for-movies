@@ -44,9 +44,8 @@
         {
             <p class="rating">⭐ @Movie.RatingText</p>
         }
-        <p class="synopsis">
-            @(string.IsNullOrEmpty(Movie.Overview) ? "No description available." : 
-              (Movie.Overview.Length > 200 ? Movie.Overview.Substring(0, 200) + "..." : Movie.Overview))
+        <p class="synopsis" @ref="synopsisElement">
+            @(string.IsNullOrEmpty(Movie.Overview) ? "No description available." : Movie.Overview)
         </p>
     </div>
 </div>
@@ -114,7 +113,7 @@
     }
 
     .movie-poster {
-        height: 60%;
+        height: 55%;
         background: #f0f0f0;
         display: flex;
         align-items: center;
@@ -136,7 +135,7 @@
     }
 
     .movie-info {
-        padding: 20px;
+        padding: 24px;
         flex: 1;
         display: flex;
         flex-direction: column;
@@ -144,6 +143,7 @@
         position: relative;
         z-index: 2;
         background: white;
+        min-height: 0;
     }
 
     .movie-info h2 {
@@ -171,14 +171,34 @@
 
     .synopsis {
         color: #555;
-        line-height: 1.4;
+        line-height: 1.5;
         font-size: 0.9rem;
         flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        display: -webkit-box;
-        -webkit-line-clamp: 4;
-        -webkit-box-orient: vertical;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 8px;
+        margin: 0;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0,0,0,0.3) transparent;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .synopsis::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .synopsis::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .synopsis::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.3);
+        border-radius: 2px;
+    }
+
+    .synopsis::-webkit-scrollbar-thumb:hover {
+        background: rgba(0,0,0,0.5);
     }
 
     .year {
@@ -199,7 +219,9 @@
     [Parameter] public EventCallback<bool> OnSwipe { get; set; }
     [Parameter] public EventCallback OnAnimationComplete { get; set; }
 
+    private ElementReference synopsisElement;
     private bool _isDragging = false;
+    private bool _isScrollingText = false;
     private float _dragX = 0;
     private float _dragY = 0;
     private float _startX = 0;
@@ -238,6 +260,7 @@
         if (_isAnimating || e.Touches.Length == 0) return;
         
         _isDragging = true;
+        _isScrollingText = false; // Reset scroll detection
         _startX = (float)e.Touches[0].ClientX;
         _startY = (float)e.Touches[0].ClientY;
         _dragX = 0;
@@ -248,14 +271,42 @@
     {
         if (!_isDragging || _isAnimating || e.Touches.Length == 0) return;
         
-        _dragX = (float)e.Touches[0].ClientX - _startX;
-        _dragY = (float)e.Touches[0].ClientY - _startY;
+        var newDragX = (float)e.Touches[0].ClientX - _startX;
+        var newDragY = (float)e.Touches[0].ClientY - _startY;
+        
+        // If this is the first significant movement, determine if it's a vertical scroll or horizontal swipe
+        if (!_isScrollingText && Math.Abs(newDragX) < 10 && Math.Abs(newDragY) < 10)
+        {
+            // Still in the dead zone, don't make a decision yet
+            return;
+        }
+        
+        if (!_isScrollingText && Math.Abs(newDragY) > Math.Abs(newDragX) && Math.Abs(newDragY) > 15)
+        {
+            // This looks like a vertical scroll, not a horizontal swipe
+            _isScrollingText = true;
+            _isDragging = false;
+            return;
+        }
+        
+        if (_isScrollingText) return; // Don't process swipe if we're scrolling
+        
+        _dragX = newDragX;
+        _dragY = newDragY;
         
         StateHasChanged();
     }
 
     private async Task OnTouchEnd(TouchEventArgs e)
     {
+        if (_isScrollingText)
+        {
+            // Reset flags if we were scrolling
+            _isScrollingText = false;
+            _isDragging = false;
+            return;
+        }
+        
         if (!_isDragging || _isAnimating) return;
         
         await HandleSwipeEnd();
@@ -267,6 +318,7 @@
         if (_isAnimating) return;
         
         _isDragging = true;
+        _isScrollingText = false; // Reset scroll detection
         _startX = (float)e.ClientX;
         _startY = (float)e.ClientY;
         _dragX = 0;
