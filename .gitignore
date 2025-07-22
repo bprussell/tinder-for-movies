@@ -182,3 +182,7 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database 
 healthchecksdb
+
+# Local configuration files (contain sensitive data)
+appsettings.local.json
+appsettings.*.local.json

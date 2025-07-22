@@ -61,6 +61,7 @@
         
         <!-- Configuration files -->
         <MauiAsset Include="appsettings.json" LogicalName="appsettings.json" />
+        <MauiAsset Include="appsettings.local.json" LogicalName="appsettings.local.json" Condition="Exists('appsettings.local.json')" />
     </ItemGroup>
 
     <ItemGroup>

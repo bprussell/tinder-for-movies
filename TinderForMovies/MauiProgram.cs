@@ -21,8 +21,9 @@ namespace TinderForMovies
 
             // Add configuration
             builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+            builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 
-            // Configure settings
+            // Configure settings (local file overrides main settings)
             builder.Services.Configure<TvdbSettings>(
                 builder.Configuration.GetSection(TvdbSettings.SectionName));
 
