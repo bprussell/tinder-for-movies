@@ -239,7 +239,8 @@
 </style>
 
 @code {
-    private bool isLoading = true;
+    private bool isLoading = false;  // Start as false to allow initial load
+    private bool isLoadingInProgress = false;  // Track actual loading state
     private string? errorMessage;
     private Movie? currentMovie;
     private List<Movie> movieQueue = new();
@@ -252,49 +253,102 @@
 
     private async Task LoadMoviesAsync()
     {
-        isLoading = true;
-        errorMessage = null;
-        StateHasChanged();
+        // Prevent multiple concurrent loads
+        if (isLoadingInProgress) return;
+        
+        isLoadingInProgress = true;
+        
+        // Only show loading UI if we have no movies to display
+        if (currentMovie == null && movieQueue.Count == 0)
+        {
+            isLoading = true;
+            StateHasChanged();
+        }
 
         try
         {
-            var movies = await TvdbService.GetPopularMoviesAsync(currentPage);
-            if (movies.Any())
+            var totalPagesAttempted = 0;
+            var maxPagesToTry = 50; // Increased from 20
+            
+            while (movieQueue.Count < 10 && totalPagesAttempted < maxPagesToTry)
             {
+                System.Diagnostics.Debug.WriteLine($"Loading page {currentPage}, queue has {movieQueue.Count} movies, attempted {totalPagesAttempted} pages");
+                
+                var movies = await TvdbService.GetPopularMoviesAsync(currentPage);
+                if (!movies.Any())
+                {
+                    System.Diagnostics.Debug.WriteLine($"No movies returned from API for page {currentPage}");
+                    break;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Got {movies.Count} movies from API for page {currentPage}");
+                
                 // Filter out movies the user has already interacted with
                 var newMovies = new List<Movie>();
                 foreach (var movie in movies)
                 {
-                    if (!await InteractionService.HasUserInteractedWithMovieAsync(movie.Id))
+                    try
                     {
+                        if (!await InteractionService.HasUserInteractedWithMovieAsync(movie.Id))
+                        {
+                            newMovies.Add(movie);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // If we can't check interaction, include the movie
+                        System.Diagnostics.Debug.WriteLine($"Error checking interaction for movie {movie.Id}: {ex.Message}");
                         newMovies.Add(movie);
                     }
                 }
                 
-                movieQueue.AddRange(newMovies);
-                if (currentMovie == null)
-                {
-                    ShowNextMovie();
-                }
-                currentPage++;
+                System.Diagnostics.Debug.WriteLine($"After filtering, got {newMovies.Count} new movies for page {currentPage}");
                 
-                // If we filtered out too many movies, try loading the next page
-                if (newMovies.Count < 3 && movieQueue.Count < 5)
+                if (newMovies.Any())
                 {
+                    movieQueue.AddRange(newMovies);
+                    if (currentMovie == null)
+                    {
+                        ShowNextMovie();
+                    }
+                }
+                
+                currentPage++;
+                totalPagesAttempted++;
+                
+                // If we have enough movies, break out
+                if (movieQueue.Count >= 10) break;
+            }
+            
+            // Only show "no more movies" if we truly have nothing
+            if (currentMovie == null && movieQueue.Count == 0)
+            {
+                if (totalPagesAttempted >= maxPagesToTry)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Reached max pages ({maxPagesToTry}), resetting to page 1");
+                    currentPage = 1; // Reset to start over
+                    errorMessage = "Reached end of available movies. Restarting from the beginning!";
+                    // Try one more time from the beginning
+                    isLoadingInProgress = false;
                     await LoadMoviesAsync();
+                    return;
+                }
+                else
+                {
+                    errorMessage = "No movies available from the API. Please try again later.";
                 }
             }
-            else if (currentMovie == null)
-            {
-                errorMessage = "No movies found. Please check your API configuration.";
-            }
+            
+            System.Diagnostics.Debug.WriteLine($"LoadMoviesAsync completed: queue={movieQueue.Count}, current={currentMovie?.Title ?? "null"}");
         }
         catch (Exception ex)
         {
             errorMessage = $"Failed to load movies: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"LoadMoviesAsync error: {ex}");
         }
         finally
         {
+            isLoadingInProgress = false;
             isLoading = false;
             StateHasChanged();
         }
@@ -307,16 +361,28 @@
             currentMovie = movieQueue.First();
             movieQueue.RemoveAt(0);
             
-            // Load more movies when queue gets low
-            if (movieQueue.Count <= 2)
+            System.Diagnostics.Debug.WriteLine($"Showing next movie: {currentMovie.Title}, queue now has {movieQueue.Count} movies");
+            
+            // Load more movies when queue gets low (on UI thread to prevent threading issues)
+            if (movieQueue.Count <= 3 && !isLoadingInProgress)
             {
-                _ = Task.Run(LoadMoviesAsync);
+                System.Diagnostics.Debug.WriteLine("Queue running low, triggering background load");
+                _ = LoadMoviesAsync();
             }
         }
         else
         {
             currentMovie = null;
+            System.Diagnostics.Debug.WriteLine("No movies in queue, setting currentMovie to null");
+            
+            // Try to load more movies if queue is empty
+            if (!isLoadingInProgress)
+            {
+                _ = LoadMoviesAsync();
+            }
         }
+        
+        StateHasChanged();
     }
 
     private async Task PassMovie()
@@ -326,15 +392,22 @@
             try
             {
                 await InteractionService.SaveRejectionAsync(currentMovie);
+                ShowNextMovie();
             }
             catch (Exception ex)
             {
-                // Log error but continue
+                // Log error and show user feedback
                 System.Diagnostics.Debug.WriteLine($"Error saving rejection: {ex.Message}");
+                errorMessage = $"Failed to save rejection: {ex.Message}";
+                // Still advance to next movie to not block the user
+                ShowNextMovie();
             }
         }
+        else
+        {
+            ShowNextMovie();
+        }
         
-        ShowNextMovie();
         StateHasChanged();
     }
 
@@ -345,15 +418,22 @@
             try
             {
                 await InteractionService.SaveMatchAsync(currentMovie);
+                ShowNextMovie();
             }
             catch (Exception ex)
             {
-                // Log error but continue
+                // Log error and show user feedback
                 System.Diagnostics.Debug.WriteLine($"Error saving match: {ex.Message}");
+                errorMessage = $"Failed to save match: {ex.Message}";
+                // Still advance to next movie to not block the user
+                ShowNextMovie();
             }
         }
+        else
+        {
+            ShowNextMovie();
+        }
         
-        ShowNextMovie();
         StateHasChanged();
     }
 }

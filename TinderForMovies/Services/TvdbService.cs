@@ -65,37 +65,141 @@ public class TvdbService : ITvdbService
 
     public async Task<List<Movie>> GetPopularMoviesAsync(int page = 1)
     {
-        // TVDB doesn't have a "popular movies" endpoint, so we'll search for popular movie titles
-        var popularMovies = new[]
+        // Use a much larger list of specific movie titles to avoid generic search issues
+        var movieTitles = new[]
         {
+            // Classics
             "The Shawshank Redemption", "The Godfather", "The Dark Knight", "Pulp Fiction",
             "The Lord of the Rings", "Forrest Gump", "Star Wars", "Inception",
             "The Matrix", "Goodfellas", "The Silence of the Lambs", "Saving Private Ryan",
             "Schindler's List", "Terminator 2", "Back to the Future", "Alien",
             "The Lion King", "Gladiator", "Titanic", "Jurassic Park",
-            "Avatar", "Avengers", "Spider-Man", "Batman", "Superman"
+            
+            // Modern hits
+            "Avatar", "Avengers", "Spider-Man", "Batman", "Superman", "Iron Man",
+            "The Dark Knight Rises", "Interstellar", "Dunkirk", "Joker",
+            "Parasite", "1917", "Once Upon a Time in Hollywood", "Jojo Rabbit",
+            "Ford v Ferrari", "The Irishman", "Marriage Story", "Little Women",
+            
+            // Action movies
+            "Mad Max Fury Road", "John Wick", "Mission Impossible", "Fast and Furious",
+            "Die Hard", "Lethal Weapon", "Rush Hour", "The Bourne Identity",
+            "Casino Royale", "Skyfall", "Top Gun", "Heat", "Speed", "Face/Off",
+            
+            // Comedies
+            "Groundhog Day", "The Big Lebowski", "Anchorman", "Superbad",
+            "Pineapple Express", "Step Brothers", "Talladega Nights", "Wedding Crashers",
+            "Old School", "Meet the Parents", "There's Something About Mary", "Dumb and Dumber",
+            
+            // Horror/Thriller
+            "Get Out", "A Quiet Place", "Hereditary", "The Conjuring",
+            "Insidious", "Saw", "Scream", "Halloween", "Friday the 13th",
+            "The Exorcist", "Psycho", "Jaws", "The Thing", "Poltergeist",
+            
+            // Sci-Fi
+            "Blade Runner", "Minority Report", "Total Recall", "The Fifth Element",
+            "District 9", "Elysium", "Pacific Rim", "Edge of Tomorrow",
+            "Ex Machina", "Her", "Arrival", "Gravity", "Prometheus", "Aliens",
+            
+            // Romance/Drama
+            "Titanic", "The Notebook", "Casablanca", "When Harry Met Sally",
+            "Ghost", "Pretty Woman", "Sleepless in Seattle", "You've Got Mail",
+            "The Princess Bride", "Dirty Dancing", "Top Gun", "Jerry Maguire",
+            
+            // Animated
+            "Toy Story", "Finding Nemo", "The Incredibles", "Monsters Inc",
+            "Up", "WALL-E", "Inside Out", "Coco", "Moana", "Frozen",
+            "Shrek", "How to Train Your Dragon", "Kung Fu Panda", "Madagascar",
+            
+            // More recent hits
+            "Black Panther", "Wonder Woman", "Aquaman", "Captain Marvel",
+            "Endgame", "Infinity War", "Thor Ragnarok", "Guardians of the Galaxy",
+            "Doctor Strange", "Ant-Man", "Spider-Man Homecoming", "Civil War",
+            
+            // Classic franchises  
+            "Raiders of the Lost Ark", "E.T.", "Close Encounters", "Jaws",
+            "Rocky", "Rambo", "Terminator", "Predator", "RoboCop", "Total Recall",
+            "Demolition Man", "Judge Dredd", "The Running Man", "Eraser"
         };
 
         var movies = new List<Movie>();
-        var startIndex = (page - 1) * 10;
-        var endIndex = Math.Min(startIndex + 10, popularMovies.Length);
+        var moviesPerPage = 10;
+        var startIndex = (page - 1) * moviesPerPage;
 
-        for (int i = startIndex; i < endIndex; i++)
+        // Calculate how many complete cycles through the array we need
+        var cycleLength = movieTitles.Length;
+        var currentCycle = startIndex / cycleLength;
+        var indexInCycle = startIndex % cycleLength;
+
+        System.Diagnostics.Debug.WriteLine($"Page {page}: Starting at cycle {currentCycle}, index {indexInCycle}");
+
+        var moviesAdded = 0;
+        var attempts = 0;
+        var maxAttempts = moviesPerPage * 3; // Try up to 3x to get enough movies
+
+        while (moviesAdded < moviesPerPage && attempts < maxAttempts)
         {
+            var movieIndex = (indexInCycle + attempts) % cycleLength;
+            var movieTitle = movieTitles[movieIndex];
+            
+            // For later cycles, add variation to the search
+            var searchTerm = movieTitle;
+            if (currentCycle > 0)
+            {
+                // Add year variations, sequels, etc.
+                var variations = new[]
+                {
+                    movieTitle,
+                    $"{movieTitle} 2",
+                    $"{movieTitle} II", 
+                    $"{movieTitle} Returns",
+                    $"{movieTitle} Reloaded",
+                    movieTitle.Replace("The ", ""),
+                    movieTitle + " movie"
+                };
+                searchTerm = variations[currentCycle % variations.Length];
+            }
+
             try
             {
-                var searchResults = await SearchMoviesAsync(popularMovies[i]);
+                System.Diagnostics.Debug.WriteLine($"Searching for: '{searchTerm}'");
+                var searchResults = await SearchMoviesAsync(searchTerm);
+                
                 if (searchResults.Any())
                 {
-                    movies.Add(searchResults.First());
+                    // Filter to ensure we get actual movies with real titles
+                    var validMovies = searchResults.Where(m => 
+                        !string.IsNullOrEmpty(m.Title) && 
+                        m.Title.Length > 1 &&
+                        !m.Title.Equals("action", StringComparison.OrdinalIgnoreCase) &&
+                        !m.Title.Equals("comedy", StringComparison.OrdinalIgnoreCase) &&
+                        !m.Title.Equals("drama", StringComparison.OrdinalIgnoreCase) &&
+                        !m.Title.Equals("horror", StringComparison.OrdinalIgnoreCase) &&
+                        !m.Title.Equals("thriller", StringComparison.OrdinalIgnoreCase) &&
+                        m.Id > 0
+                    ).Take(2).ToList(); // Take up to 2 movies per search
+                    
+                    foreach (var movie in validMovies)
+                    {
+                        if (moviesAdded >= moviesPerPage) break;
+                        if (!movies.Any(m => m.Id == movie.Id)) // Avoid duplicates
+                        {
+                            movies.Add(movie);
+                            moviesAdded++;
+                            System.Diagnostics.Debug.WriteLine($"Added movie: '{movie.Title}' (ID: {movie.Id})");
+                        }
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Continue with next movie if one fails
+                System.Diagnostics.Debug.WriteLine($"Search failed for '{searchTerm}': {ex.Message}");
             }
+            
+            attempts++;
         }
 
+        System.Diagnostics.Debug.WriteLine($"Page {page}: Found {movies.Count} movies after {attempts} attempts");
         return movies;
     }
 
